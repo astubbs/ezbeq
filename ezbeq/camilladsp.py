@@ -463,7 +463,7 @@ class CamillaDspProtocol(WebSocketClientProtocol):
                     self.factory.listener.on_get_playback_rms(msg['GetPlaybackSignalRms'])
                 elif 'GetPlaybackSignalPeak' in msg:
                     self.factory.listener.on_get_playback_peak(msg['GetPlaybackSignalPeak'])
-            except:
+            except Exception as e:
                 logger.exception(f'Unable to decode {len(payload)} bytes in text payload')
 
 

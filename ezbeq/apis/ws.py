@@ -65,7 +65,7 @@ class WsProtocol(WebSocketServerProtocol):
                 self.factory.register_for_levels(device_name, self)
             elif s.startswith(LOAD_CATALOGUE_CMD):
                 self.factory.send_catalogue(self)
-        except:
+        except Exception as e:
             logger.exception('Message received failure')
 
 
