@@ -318,10 +318,10 @@ class Catalogues:
         else:
             begin = time.time()
             next_offset = offset + limit
-            select = f"SELECT {UI_FIELDS_STR} FROM catalogue_entry WHERE version = '{version}'"
+            select = f"SELECT {UI_FIELDS_STR} FROM catalogue_entry WHERE version = ?"
             msg = json.dumps({
                 'message': 'CatalogueEntries',
-                'data': self.__fetch_entries(select, UI_FIELDS, limit, offset)
+                'data': self.__fetch_entries(select, UI_FIELDS, limit, offset, params=(version,))
             }, ensure_ascii=False)
             end = time.time()
             logger.info(f'Loaded chunk from {offset} to {next_offset} in {to_millis(begin, end)}ms')
@@ -483,7 +483,8 @@ class Catalogues:
         with db_ops(self.__db) as cur:
             before = time.time()
             res = cur.execute(
-                f"SELECT DISTINCT value FROM catalogue_meta WHERE version = '{version}' AND meta_type = '{meta_type}';")
+                "SELECT DISTINCT value FROM catalogue_meta WHERE version = ? AND meta_type = ?;",
+                (version, meta_type))
             values = [row[0] for row in res.fetchmany(size=1000)]
             after = time.time()
             logger.info(f'Loaded {len(values)} {meta_type} entries from db in {to_millis(before, after)} ms')
@@ -556,11 +557,13 @@ class Catalogues:
         with db_ops(self.__db) as cur:
             before = time.time()
             cur.execute(
-                f"DELETE FROM catalogue_entry WHERE loaded_at <= {min_loaded_at} AND version <> '{keep_version}';")
+                "DELETE FROM catalogue_entry WHERE loaded_at <= ? AND version <> ?;",
+                (min_loaded_at, keep_version))
             entries_deleted = cur.rowcount
             cur.connection.commit()
             cur.execute(
-                f"DELETE FROM catalogue_meta WHERE version <> '{keep_version}';")
+                "DELETE FROM catalogue_meta WHERE version <> ?;",
+                (keep_version,))
             meta_deleted = cur.rowcount
             cur.connection.commit()
             end = time.time()
@@ -581,17 +584,17 @@ class Catalogues:
                 logger.exception(f"Failed to refresh catalogue", e)
 
     def find_by_id(self, entry_id: str, as_dict: bool = False) -> Optional[Union[CatalogueEntry, dict]]:
-        return self.__find(f"{ID} = '{entry_id}'", as_dict)
+        return self.__find(ID, entry_id, as_dict)
 
     def find_by_digest(self, digest: str, as_dict: bool = False) -> Optional[Union[CatalogueEntry, dict]]:
-        return self.__find(f"{DIGEST} = '{digest}'", as_dict)
+        return self.__find(DIGEST, digest, as_dict)
 
-    def __find(self, clause: str, as_dict: bool) -> Optional[Union[CatalogueEntry, dict]]:
+    def __find(self, field: str, value: str, as_dict: bool) -> Optional[Union[CatalogueEntry, dict]]:
         catalogue = self.latest
         if not catalogue:
             return None
-        sql = f"SELECT {FIELDS_STR} FROM catalogue_entry WHERE {clause}"
-        results = self.__fetch_entries(sql, FIELDS, 1)
+        sql = f"SELECT {FIELDS_STR} FROM catalogue_entry WHERE {field} = ?"
+        results = self.__fetch_entries(sql, FIELDS, 1, params=(value,))
         if results:
             return results[0] if as_dict else CatalogueEntry(results[0][ID], results[0])
         else:
@@ -608,40 +611,44 @@ class Catalogues:
             fields = FIELDS
             fields_str = FIELDS_STR
 
-        sql = f"SELECT {fields_str} FROM catalogue_entry WHERE version = '{catalogue.version}'"
-
-        def in_clause(vals: List[str], field: str) -> str:
-            filt = '"' + '","'.join(vals) + '"'
-            return f'{field} IN ({filt})'
+        sql = f"SELECT {fields_str} FROM catalogue_entry WHERE version = ?"
+        params: List = [catalogue.version]
 
         if authors:
-            sql = f'{sql} AND {in_clause(authors, AUTHOR)}'
+            placeholders = ','.join(['?'] * len(authors))
+            sql = f'{sql} AND {AUTHOR} IN ({placeholders})'
+            params.extend(authors)
         if years:
-            sql = f'{sql} AND {YEAR} IN ({",".join([str(y) for y in years])})'
+            placeholders = ','.join(['?'] * len(years))
+            sql = f'{sql} AND {YEAR} IN ({placeholders})'
+            params.extend(years)
         if audio_types:
             if len(audio_types) == 1:
-                sql = f'{sql} AND {AUDIO_TYPES} LIKE "%|{audio_types[0]}|%"'
+                sql = f'{sql} AND {AUDIO_TYPES} LIKE ?'
+                params.append(f'%|{audio_types[0]}|%')
             else:
-                sql = f'{sql} AND ('
-                for idx, audio_type in enumerate(audio_types):
-                    prefix = ' OR ' if idx != 0 else ' '
-                    sql = f'{sql}{prefix}{AUDIO_TYPES} LIKE "%|{audio_type}|%"'
-                sql = f'{sql})'
+                clauses = ' OR '.join([f'{AUDIO_TYPES} LIKE ?' for _ in audio_types])
+                sql = f'{sql} AND ({clauses})'
+                params.extend(f'%|{t}|%' for t in audio_types)
         if content_types:
-            sql = f'{sql} AND {in_clause(content_types, CONTENT_TYPE)}'
+            placeholders = ','.join(['?'] * len(content_types))
+            sql = f'{sql} AND {CONTENT_TYPE} IN ({placeholders})'
+            params.extend(content_types)
         if tmdb_id:
-            sql = f'{sql} AND {THE_MOVIE_DB} = "{tmdb_id}"'
+            sql = f'{sql} AND {THE_MOVIE_DB} = ?'
+            params.append(tmdb_id)
         if text:
-            t = text.lower()
             sql = (f'{sql} AND ('
-                   f'LOWER({FORMATTED_TITLE}) LIKE "%{t}%" OR '
-                   f'LOWER({ALT_TITLE}) LIKE "%{t}%" OR '
-                   f'LOWER({COLLECTION}) LIKE "%{t}%"'
+                   f'LOWER({FORMATTED_TITLE}) LIKE ? OR '
+                   f'LOWER({ALT_TITLE}) LIKE ? OR '
+                   f'LOWER({COLLECTION}) LIKE ?'
                    ')')
-        return self.__fetch_entries(sql, fields, limit)
+            like_val = f'%{text.lower()}%'
+            params.extend([like_val, like_val, like_val])
+        return self.__fetch_entries(sql, fields, limit, params=tuple(params))
 
-    def __fetch_entries(self, select: str, fields: List[str], limit: Optional[int], offset: Optional[int] = None) -> \
-            List[dict]:
+    def __fetch_entries(self, select: str, fields: List[str], limit: Optional[int], offset: Optional[int] = None,
+                        params: tuple = ()) -> List[dict]:
         if limit:
             select = f'{select} LIMIT {limit}'
         if offset:
@@ -661,7 +668,7 @@ class Catalogues:
             before = time.time()
             logger.debug(f'>>> {select}')
             entries: List[dict] = []
-            res = cur.execute(select)
+            res = cur.execute(select, params)
             rows = res.fetchmany(size=limit if limit else 20000)
             after_load = time.time()
             logger.info(f'Loaded {len(rows)} entries from db in {to_millis(before, after_load)} ms')
