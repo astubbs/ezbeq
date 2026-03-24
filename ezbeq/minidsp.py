@@ -521,9 +521,13 @@ class Minidsp(PersistentDevice[MinidspState]):
                     logger.warning(f'[{self.name}] Unable to probe')
                 return MinidspState(self.name, self.__descriptor, **values)
             else:
-                logger.error(f"[{self.name}] No output returned from device")
+                msg = f"[{self.name}] No output returned from device"
+                logger.error(msg)
+                self.ws_server.broadcast_error(msg, persistent=True)
         except:
-            logger.exception(f"[{self.name}] Unable to parse device state {output}")
+            msg = f"[{self.name}] Unable to parse device state {output}"
+            logger.exception(msg)
+            self.ws_server.broadcast_error(msg, persistent=True)
         return None
 
     @staticmethod
