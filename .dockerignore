@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.idea
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+docs/
+examples/
+tests/
+ui/node_modules/
+ui/.yarn/cache/
+ezbeq/ui/
