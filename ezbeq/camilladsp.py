@@ -504,30 +504,24 @@ class CamillaDspProtocol(WebSocketClientProtocol):
             logger.warning(f"Received {len(payload)} bytes in binary payload, ignoring")
         else:
             try:
-                msg: dict = json.loads(payload.decode("utf8"))
-                logger.debug(f">>> {msg}")
-                if "GetConfigJson" in msg:
-                    self.factory.listener.on_get_config(msg["GetConfigJson"])
-                elif "SetConfigJson" in msg:
-                    self.factory.listener.on_set_config(msg["SetConfigJson"]["result"])
-                elif "Reload" in msg:
-                    self.factory.listener.on_reload(msg["Reload"]["result"])
-                elif "GetVolume" in msg:
-                    self.factory.listener.on_get_volume(msg["GetVolume"])
-                elif "GetMute" in msg:
-                    self.factory.listener.on_get_mute(msg["GetMute"])
-                elif "GetPlaybackSignalRms" in msg:
-                    self.factory.listener.on_get_playback_rms(
-                        msg["GetPlaybackSignalRms"]
-                    )
-                elif "GetPlaybackSignalPeak" in msg:
-                    self.factory.listener.on_get_playback_peak(
-                        msg["GetPlaybackSignalPeak"]
-                    )
-            except Exception:
-                logger.exception(
-                    f"Unable to decode {len(payload)} bytes in text payload"
-                )
+                msg: dict = json.loads(payload.decode('utf8'))
+                logger.debug(f'>>> {msg}')
+                if 'GetConfigJson' in msg:
+                    self.factory.listener.on_get_config(msg['GetConfigJson'])
+                elif 'SetConfigJson' in msg:
+                    self.factory.listener.on_set_config(msg['SetConfigJson']['result'])
+                elif 'Reload' in msg:
+                    self.factory.listener.on_reload(msg['Reload']['result'])
+                elif 'GetVolume' in msg:
+                    self.factory.listener.on_get_volume(msg['GetVolume'])
+                elif 'GetMute' in msg:
+                    self.factory.listener.on_get_mute(msg['GetMute'])
+                elif 'GetPlaybackSignalRms' in msg:
+                    self.factory.listener.on_get_playback_rms(msg['GetPlaybackSignalRms'])
+                elif 'GetPlaybackSignalPeak' in msg:
+                    self.factory.listener.on_get_playback_peak(msg['GetPlaybackSignalPeak'])
+            except Exception as e:
+                logger.exception(f'Unable to decode {len(payload)} bytes in text payload')
 
 
 class CamillaDspClientFactory(WebSocketClientFactory, ReconnectingClientFactory):
