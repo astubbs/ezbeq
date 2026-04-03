@@ -41,7 +41,7 @@ const Footer = ({meta}) => {
     if (meta || version) {
         const sha1 = meta && meta.version ? meta.version.substring(0, 7) : '';
         return (
-            <StyledGrid container justifyContent="space-around" className={classes.noLeft}>
+            <StyledGrid container justifyContent="space-around" gap={2} className={classes.noLeft}>
                 <Grid>
                     <Typography variant={'caption'} color={'textSecondary'}>
                         {meta ? `cat: ${formatSeconds(meta.loaded)} / ${sha1}` : ''}
