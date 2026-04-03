@@ -195,7 +195,12 @@ class Config:
     @property
     def git_info(self) -> dict:
         import subprocess
-        result = {'branch': None, 'sha': None}
+        result = {
+            'branch': os.environ.get('GIT_BRANCH'),
+            'sha': os.environ.get('GIT_SHA'),
+        }
+        if result['branch'] and result['sha']:
+            return result
         try:
             result['sha'] = subprocess.check_output(
                 ['git', 'rev-parse', '--short', 'HEAD'],
