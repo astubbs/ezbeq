@@ -31,6 +31,7 @@ def create_app(config: Config, ws: WsServer = AutobahnWsServer()) -> tuple[Flask
         'device_bridge': DeviceRepository(config, ws_server, catalogue),
         'catalogue': catalogue,
         'version': config.version,
+        'git_info': config.git_info,
         'load': LoadTester(os.path.join(config.config_path, 'ezbeq.db'))
     }
     app = Flask('ezbeq')
@@ -74,7 +75,9 @@ def main(args=None):
     # and mode is active.
     raw = cfg.as_dict()
     logger.warning('=' * 60)
-    logger.warning(f'  ezbeq  |  port: {cfg.port}  |  config: {cfg.config_path}')
+    gi = cfg.git_info
+    git_str = f"  git: {gi['branch']}@{gi['sha']}" if gi.get('branch') or gi.get('sha') else ''
+    logger.warning(f'  ezbeq  |  port: {cfg.port}  |  config: {cfg.config_path}{git_str}')
     logger.warning(f'  logging: debug={cfg.is_debug_logging}  access={cfg.is_access_logging}')
     for dev_name, dev_cfg in raw.get('devices', {}).items():
         dev_type = dev_cfg.get('type', '?')
@@ -217,7 +220,7 @@ def main(args=None):
     access_logger = logging.getLogger('ezbeq.access')
     # When EZBEQ_ACCESS_LOG_STDOUT=1 each request is also echoed to stdout so
     # it appears in `docker compose logs`.  This is set by default in
-    # docker-compose.local.yaml for local development.
+    # docker-compose.dev.yaml for local development.
     _access_log_stdout = os.environ.get('EZBEQ_ACCESS_LOG_STDOUT', '0').strip() == '1'
 
     class SafeSite(server.Site):

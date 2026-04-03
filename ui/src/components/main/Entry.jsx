@@ -140,7 +140,7 @@ const Uploader = ({
             {slotGroup}
             {gainControl}
             <Button variant="contained"
-                    startIcon={pending ? <CircularProgress size={24}/> : <PublishIcon fontSize="small"/>}
+                    startIcon={pending ? <CircularProgress size={24} color="inherit"/> : <PublishIcon fontSize="small"/>}
                     onClick={upload}>
                 Upload
             </Button>
