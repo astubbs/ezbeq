@@ -44,7 +44,7 @@ const Footer = ({meta}) => {
             <StyledGrid container justifyContent="space-around" className={classes.noLeft}>
                 <Grid>
                     <Typography variant={'caption'} color={'textSecondary'}>
-                        {meta ? `${formatSeconds(meta.loaded)} / ${sha1}` : ''}
+                        {meta ? `cat: ${formatSeconds(meta.loaded)} / ${sha1}` : ''}
                     </Typography>
                 </Grid>
                 <Grid>
@@ -52,8 +52,9 @@ const Footer = ({meta}) => {
                         {(() => {
                             const gitRef = version.branch ? `${version.branch}@${version.sha || ''}` : version.sha || '';
                             const v = version.version;
-                            if (v && v !== 'UNKNOWN') return `v${v}${gitRef ? ` (${gitRef})` : ''}`;
-                            return gitRef || v || '';
+                            const vStr = (v && v !== 'UNKNOWN') ? `v${v}` : (gitRef ? '' : (v || ''));
+                            const gitStr = gitRef ? ` git: ${gitRef}` : '';
+                            return vStr || gitStr ? `app: ${vStr}${gitStr}`.trim() : '';
                         })()}
                     </Typography>
                 </Grid>
