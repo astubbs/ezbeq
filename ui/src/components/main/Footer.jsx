@@ -49,7 +49,12 @@ const Footer = ({meta}) => {
                 </Grid>
                 <Grid>
                     <Typography variant={'caption'} color={'textSecondary'}>
-                        {version.version !== 'UNKNOWN' ? `v${version.version}` : version.version}
+                        {(() => {
+                            const gitRef = version.branch ? `${version.branch}@${version.sha || ''}` : version.sha || '';
+                            const v = version.version;
+                            if (v && v !== 'UNKNOWN') return `v${v}${gitRef ? ` (${gitRef})` : ''}`;
+                            return gitRef || v || '';
+                        })()}
                     </Typography>
                 </Grid>
             </StyledGrid>

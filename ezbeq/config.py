@@ -193,6 +193,23 @@ class Config:
         return v
 
     @property
+    def git_info(self) -> dict:
+        import subprocess
+        result = {'branch': None, 'sha': None}
+        try:
+            result['sha'] = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                stderr=subprocess.DEVNULL, cwd=os.path.dirname(__file__)
+            ).decode().strip()
+            result['branch'] = subprocess.check_output(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                stderr=subprocess.DEVNULL, cwd=os.path.dirname(__file__)
+            ).decode().strip()
+        except Exception:
+            pass
+        return result
+
+    @property
     def load_catalogue_at_startup(self):
         return False
 

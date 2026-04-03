@@ -31,6 +31,7 @@ def create_app(config: Config, ws: WsServer = AutobahnWsServer()) -> tuple[Flask
         'device_bridge': DeviceRepository(config, ws_server, catalogue),
         'catalogue': catalogue,
         'version': config.version,
+        'git_info': config.git_info,
         'load': LoadTester(os.path.join(config.config_path, 'ezbeq.db'))
     }
     app = Flask('ezbeq')
