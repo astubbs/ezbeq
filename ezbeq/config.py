@@ -77,6 +77,20 @@ class Config:
         return self.config.get('accessLogging', False)
 
     @property
+    def is_mdns_enabled(self):
+        """
+        :return: if mDNS service advertisement is on, defaults to False.
+        """
+        return self.config.get('mdns', False)
+
+    @property
+    def mdns_name(self):
+        """
+        :return: custom mDNS service name, or None to use hostname.
+        """
+        return self.config.get('mdnsName', None)
+
+    @property
     def port(self):
         """
         :return: the port to listen on, defaults to 8080

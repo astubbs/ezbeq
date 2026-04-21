@@ -518,6 +518,102 @@ class LoadCommands(Resource):
         return load_commands(self.__bridge, device_name, str(slot), overwrite, inputs, outputs, command_type, commands)
 
 
+profile_biquad_model = v1_api.model('ProfileBiquadV1', {
+    'b': fields.List(fields.String, description='Numerator coefficients [b0, b1, b2]'),
+    'a': fields.List(fields.String, description='Denominator coefficients [a1, a2]'),
+})
+
+profile_filter_model = v1_api.model('ProfileFilterV1', {
+    'type': fields.String(description='Filter type: LowShelf, HighShelf, or PeakingEQ'),
+    'freq': fields.Float(description='Centre frequency in Hz'),
+    'gain': fields.Float(description='Gain in dB'),
+    'q': fields.Float(description='Q factor'),
+    'biquads': fields.Raw(description='Pre-computed biquad coefficients keyed by sample rate, e.g. {"96000": {"b": [...], "a": [...]}}'),
+})
+
+profile_model = v1_api.model('ProfileV1', {
+    'slot': fields.String(description='Slot to load into (default: "1")', default='1'),
+    'masterVolume': fields.Float(description='Master volume adjustment in dB (-127.0 to 0.0). Omit to leave unchanged.'),
+    'filters': fields.List(fields.Nested(profile_filter_model), description='List of filters to load'),
+})
+
+
+def load_profile(bridge: DeviceRepository, device_name: str, slot: str, filters: list[dict],
+                 master_volume: float | None) -> tuple[dict, int]:
+    '''
+    Loads an auto-BEQ profile: biquad filters + optional master volume + slot activation.
+    '''
+    try:
+        device = bridge.state(device_name)
+        descriptor = None
+        # Get the device descriptor for sample rate - needed for biquad computation
+        device_obj = bridge._DeviceRepository__get_device(device_name)
+        if hasattr(device_obj, '_Minidsp__descriptor'):
+            descriptor = device_obj._Minidsp__descriptor
+            fs = descriptor.fs
+        else:
+            fs = '96000'
+
+        # Convert filters to biquad commands using the existing command generator
+        from ezbeq.minidsp import MinidspBeqCommandGenerator
+        biquad_list = []
+        for f in filters:
+            bq_coeffs = MinidspBeqCommandGenerator.as_bq(f, fs)
+            biquad_list.append({
+                'b0': bq_coeffs[0], 'b1': bq_coeffs[1], 'b2': bq_coeffs[2],
+                'a1': bq_coeffs[3], 'a2': bq_coeffs[4]
+            })
+
+        # Load biquads into the slot
+        if biquad_list:
+            if descriptor:
+                inputs = list(range(1, len(descriptor.input.channels) + 1)) if descriptor.input else []
+                outputs = list(range(1, len(descriptor.output.channels) + 1)) if descriptor.output else []
+            else:
+                inputs = [1, 2]
+                outputs = [1, 2]
+            bridge.load_biquads(device_name, slot, True, inputs, outputs, biquad_list)
+
+        # Set master volume if provided
+        if master_volume is not None:
+            if master_volume < -127.0 or master_volume > 0.0:
+                return {'message': f'masterVolume must be between -127.0 and 0.0, got {master_volume}'}, 400
+            bridge.set_gain(device_name, None, None, master_volume)
+
+        # Activate the slot
+        bridge.activate(device_name, slot)
+
+        return bridge.state(device_name).serialise(), 200
+    except InvalidRequestError as e:
+        logger.exception(f"Invalid profile load request for {device_name} slot {slot}")
+        return bridge.state(device_name).serialise(), 400
+    except Exception:
+        logger.exception(f"Failed to load profile into {device_name} slot {slot}")
+        try:
+            return bridge.state(device_name).serialise(), 500
+        except Exception:
+            return {'message': 'Failed to load profile and unable to retrieve device state'}, 500
+
+
+@v1_api.route('/<string:device_name>/profile')
+@v1_api.doc(params={
+    'device_name': 'The dsp device name',
+})
+class LoadProfile(Resource):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__bridge: DeviceRepository = kwargs['device_bridge']
+
+    @v1_api.expect(profile_model, validate=True)
+    def put(self, device_name: str) -> tuple[dict, int]:
+        payload = request.get_json()
+        slot = payload.get('slot', '1')
+        filters = payload.get('filters', [])
+        master_volume = payload.get('masterVolume')
+        return load_profile(self.__bridge, device_name, slot, filters, master_volume)
+
+
 filter_model = v1_api.model('FilterV1', {
     'entryId': fields.String(description='Accepts value from the id field only')
 })
