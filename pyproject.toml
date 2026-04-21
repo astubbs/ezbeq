@@ -22,7 +22,8 @@ dependencies = [
     "flask-restx >=1.3.0, <2.0",
     "prometheus-client >=0.17.1, <1.0",
     "ijson >=3.2.3, <4.0",
-    "psutil >=5.9.5, <8.0"
+    "psutil >=5.9.5, <8.0",
+    "zeroconf (>=0.148.0,<0.149.0)"
 ]
 [project.scripts]
 ezbeq = 'ezbeq.main:main'

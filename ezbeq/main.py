@@ -278,6 +278,16 @@ def main(args=None):
         site = SafeSite(FlaskAppWrapper(), log_to_stdout=_access_log_stdout)
     endpoint = endpoints.TCP4ServerEndpoint(reactor, cfg.port, interface='0.0.0.0')
     endpoint.listen(site)
+
+    # mDNS service advertisement (opt-in via mdns: true in ezbeq.yml)
+    if cfg.is_mdns_enabled:
+        try:
+            from ezbeq.mdns import MdnsService
+            mdns = MdnsService(cfg.port, cfg.version, name=cfg.mdns_name)
+            reactor.addSystemEventTrigger('before', 'shutdown', mdns.unregister)
+        except Exception:
+            logger.exception('Failed to start mDNS, continuing without service advertisement')
+
     reactor.run()
 
 
