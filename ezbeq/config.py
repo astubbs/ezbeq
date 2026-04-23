@@ -220,17 +220,42 @@ class Config:
 
     @property
     def version(self):
+        # 1. VERSION file (written by CI on tag builds / pyinstaller). Authoritative
+        #    when present.
         if getattr(sys, 'frozen', False):
             # pyinstaller lets you copy files to arbitrary locations under the _MEIPASS root dir
             root = os.path.join(sys._MEIPASS)
         else:
             root = os.path.dirname(__file__)
         v_name = os.path.join(root, 'VERSION')
-        v = 'UNKNOWN'
         if os.path.exists(v_name):
             with open(v_name) as f:
-                v = f.read()
-        return v
+                return f.read().strip()
+        # 2. pyproject.toml — authoritative when the source tree is available
+        #    (dev target, local source). Always the current project version,
+        #    unlike importlib.metadata which can be stale after a package bump.
+        try:
+            import tomllib
+            pyproject = os.path.join(os.path.dirname(root), 'pyproject.toml')
+            if os.path.exists(pyproject):
+                with open(pyproject, 'rb') as f:
+                    data = tomllib.load(f)
+                v = data.get('project', {}).get('version') or data.get('tool', {}).get('poetry', {}).get('version')
+                if v:
+                    return v
+        except Exception:
+            pass
+        # 3. Installed package metadata — production Docker image (pip install
+        #    ezbeq) where no source tree and no VERSION file are present.
+        try:
+            from importlib.metadata import version as _pkg_version, PackageNotFoundError
+            try:
+                return _pkg_version('ezbeq')
+            except PackageNotFoundError:
+                pass
+        except ImportError:
+            pass
+        return 'UNKNOWN'
 
     @property
     def git_info(self) -> dict:
