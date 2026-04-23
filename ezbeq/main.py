@@ -70,11 +70,12 @@ def main(args=None):
     cfg = Config('ezbeq')
     logger = cfg.configure_logger()
 
-    # ── Startup banner (logged before anything else so it's at the top) ───────
-    # Use WARNING so these lines always appear on the console regardless of the
-    # debugLogging setting — they're essential for confirming the right version,
-    # build, device, and mode are active. Operators reading `docker compose logs`
-    # should be able to tell at a glance whether the expected image is running.
+    # ── Startup banner (printed before anything else so it's at the top) ──────
+    # Use print() instead of logger.* so the banner isn't drowned in the log
+    # formatter's `timestamp - pid - thread - root - WARNING - main -` prefix.
+    # The banner is for humans skimming `docker compose logs` at startup; the
+    # prefix adds nothing (the funcname on every line would just be `main`).
+    # Everything that happens after startup still goes through the logger.
     raw = cfg.as_dict()
     gi = cfg.git_info
     version = (cfg.version or 'UNKNOWN').strip()
@@ -85,24 +86,24 @@ def main(args=None):
         build_parts.append(f"({gi['commit_time']})")
     build_str = '  '.join(build_parts) if build_parts else 'unknown (no git info)'
 
-    logger.warning('=' * 72)
-    logger.warning(f'  ezbeq v{version}')
-    logger.warning(f'  build    : {build_str}')
-    logger.warning(f'  listen   : http://0.0.0.0:{cfg.port}')
-    logger.warning(f'  config   : {cfg.config_path}')
-    logger.warning(f'  logging  : debug={cfg.is_debug_logging}  access={cfg.is_access_logging}')
+    print('=' * 72, flush=True)
+    print(f'  ezbeq v{version}', flush=True)
+    print(f'  build    : {build_str}', flush=True)
+    print(f'  listen   : http://0.0.0.0:{cfg.port}', flush=True)
+    print(f'  config   : {cfg.config_path}', flush=True)
+    print(f'  logging  : debug={cfg.is_debug_logging}  access={cfg.is_access_logging}', flush=True)
     for dev_name, dev_cfg in raw.get('devices', {}).items():
         dev_type = dev_cfg.get('type', '?')
         if dev_type == 'minidsp':
             exe = dev_cfg.get('exe', 'minidsp')
             opts = dev_cfg.get('options', '')
             detail = 'STUB (no hardware)' if exe == 'stub' else f'exe={exe}' + (f'  options={opts}' if opts else '')
-            logger.warning(f'  device   : [{dev_name}]  type=minidsp  {detail}')
+            print(f'  device   : [{dev_name}]  type=minidsp  {detail}', flush=True)
         elif dev_type == 'camilladsp':
-            logger.warning(f'  device   : [{dev_name}]  type=camilladsp  ip={dev_cfg.get("ip")}:{dev_cfg.get("port")}')
+            print(f'  device   : [{dev_name}]  type=camilladsp  ip={dev_cfg.get("ip")}:{dev_cfg.get("port")}', flush=True)
         else:
-            logger.warning(f'  device   : [{dev_name}]  type={dev_type}')
-    logger.warning('=' * 72)
+            print(f'  device   : [{dev_name}]  type={dev_type}', flush=True)
+    print('=' * 72, flush=True)
 
     app, ws_server = create_app(cfg)
 
