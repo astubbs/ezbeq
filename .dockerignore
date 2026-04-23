@@ -18,14 +18,22 @@ build/
 # The built React output — Docker builds this inside the image
 ezbeq/ui/
 
-# Git history
+# Git history and CI
 .git/
 .gitignore
+.github/
 
 # Local dev / worktree metadata
 .claude/
+.idea/
+.venv/
 dev-config/
 docker-compose*.yml
+
+# Not needed at runtime
+docs/
+examples/
+tests/
 
 # Logs and local state
 *.log
