@@ -1,13 +1,17 @@
 # syntax=docker/dockerfile:1
 #
-# Multi-stage build with four targets:
+# Multi-stage build with four build targets:
 #
 #   base        – shared OS packages + minidsp binary (not used directly)
-#   builder     – production Python venv with ezbeq installed from PyPI
-#   production  – default; clean runtime image with non-root user.
-#                 Built by CI / docker buildx bake.
-#   dev         – local development; Poetry + Node/Yarn, builds React UI.
-#                 Used by bin/run-local via docker-compose.dev.yaml.
+#   ui-builder  – compiles the React UI via Yarn/Vite. Feeds both production
+#                 and dev builder stages.
+#   builder     – production Python venv: builds a wheel from local source
+#                 and installs it into /opt/venv. No PyPI fetch — the image
+#                 reflects exactly the source at build time.
+#   production  – default; clean runtime image with non-root user. Built by
+#                 CI / `scripts/publish-image` / `docker buildx bake`.
+#   dev         – local development; Poetry-managed venv, source mounted in
+#                 via docker-compose.dev.yaml so edits take effect on restart.
 
 # ── Base: runtime OS + minidsp binary ────────────────────────────────────────
 # Shared by both the production and dev build targets.
@@ -76,31 +80,57 @@ LABEL org.opencontainers.image.source=$REPO_URL \
 # and must be reflected in the compose file's ports: and healthcheck: entries.
 EXPOSE 8080
 
-# ── Production builder: install Python deps into a venv ──────────────────────
-# Separate stage so build tools don't end up in the final runtime image.
+# ── UI builder: compile React app ────────────────────────────────────────────
+# Isolated Node stage so node_modules never enters the final image layers.
+# Only the Vite dist output (~a few MB) is copied across; the 200MB+
+# node_modules is discarded after this stage completes.
+# Declared before `builder` because both the production and dev targets copy
+# the compiled UI from here.
+FROM node:22-slim AS ui-builder
+
+WORKDIR /app/ui
+
+# Copy ui source — .yarnrc.yml references .yarn/releases/yarn-4.12.0.cjs so
+# the whole ui/ tree is needed.  node_modules and .yarn/cache are excluded
+# via .dockerignore so the build context stays small.
+COPY ui/ .
+
+# Mount the yarn cache at the location Yarn 4 uses when enableGlobalCache is
+# false (i.e. the project-local .yarn/cache dir).  This persists the package
+# zip archives across builds so yarn install is fast on cache hits.
+RUN --mount=type=cache,target=/app/ui/.yarn/cache \
+    yarn install --silent && yarn build
+
+# ── Production builder: build a wheel from local source + install it ─────────
+# Produces /opt/venv containing ezbeq + runtime deps + the compiled UI. No
+# PyPI fetch — the image reflects exactly the source at build time. On tag
+# builds, CI writes ezbeq/VERSION before `docker build`; that file is included
+# in the wheel via pyproject.toml's `include` list, so the image carries the
+# released version. On branch builds with no VERSION file, config.version
+# falls back to pyproject.toml's declared version.
 FROM base AS builder
 
-# Install dependencies required for building the application (apt cache mounted
-# so .deb downloads persist across rebuilds — critical under QEMU emulation).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && apt-get install --no-install-recommends -y \
-    # Tools for compiling and building packages
     build-essential \
-    # Python virtual environment creation tool
     python3-venv && \
     python -m pip install --upgrade pip
 
-# Create a Python virtual environment at /opt/venv
 RUN python -m venv /opt/venv
-
-# Add the virtual environment to the PATH
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Install ezbeq from PyPI.
-# --pre allows pre-release versions (ezbeq's release cadence includes alphas).
-RUN pip install --pre --no-cache-dir ezbeq
+# Source layout needed for `pip install .` to build a wheel:
+# - pyproject.toml + poetry.lock: build-system config and deps.
+# - README.md: referenced by pyproject.toml's `readme` field.
+# - ezbeq/: the Python package source (including VERSION when CI wrote it).
+# - ezbeq/ui/: compiled UI from the ui-builder stage, included as package data.
+COPY pyproject.toml poetry.lock README.md ./
+COPY ezbeq/ ./ezbeq/
+COPY --from=ui-builder /app/ezbeq/ui ./ezbeq/ui/
+
+RUN pip install --no-cache-dir .
 
 # ── Production: clean runtime image ──────────────────────────────────────────
 # A clean, lightweight image for running the application.
@@ -126,25 +156,6 @@ HEALTHCHECK --interval=10s --timeout=2s \
 
 # Define the default command to run the ezbeq application
 CMD ["ezbeq"]
-
-# ── UI builder: compile React app ────────────────────────────────────────────
-# Isolated Node stage so that node_modules never enters the dev image layer.
-# Only the Vite dist output (~a few MB) is copied across; the 200MB+
-# node_modules is discarded after this stage completes.
-FROM node:22-slim AS ui-builder
-
-WORKDIR /app/ui
-
-# Copy ui source — .yarnrc.yml references .yarn/releases/yarn-4.12.0.cjs so
-# the whole ui/ tree is needed.  node_modules and .yarn/cache are excluded
-# via .dockerignore so the build context stays small.
-COPY ui/ .
-
-# Mount the yarn cache at the location Yarn 4 uses when enableGlobalCache is
-# false (i.e. the project-local .yarn/cache dir).  This persists the package
-# zip archives across builds so yarn install is fast on cache hits.
-RUN --mount=type=cache,target=/app/ui/.yarn/cache \
-    yarn install --silent && yarn build
 
 # ── Dev: local source build with Poetry ──────────────────────────────────────
 # Build context is the repo root (set by docker-compose.dev.yaml).
