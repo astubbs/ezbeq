@@ -100,6 +100,7 @@ for t in "${tags[@]}"; do
 done
 
 CACHE_REF="ghcr.io/${OWNER}/ezbeq:buildcache"
+REPO_URL="https://github.com/${OWNER}/ezbeq"
 
 echo "Owner     : $OWNER"
 echo "Branch    : ${GIT_BRANCH:-unknown}"
@@ -107,6 +108,7 @@ echo "SHA       : ${GIT_SHA:-unknown}"
 echo "Platforms : $PLATFORMS"
 echo "Tags      : ${tags[*]}"
 echo "Cache     : $CACHE_REF"
+echo "Repo URL  : $REPO_URL"
 echo
 
 # Single buildx invocation: builds every requested platform and pushes the
@@ -123,6 +125,7 @@ if ! docker buildx build \
     --target production \
     --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
     --build-arg "GIT_SHA=${GIT_SHA}" \
+    --build-arg "REPO_URL=${REPO_URL}" \
     -f "$REPO_ROOT/docker/Dockerfile" \
     "${tag_args[@]}" \
     --cache-from "type=registry,ref=${CACHE_REF}" \

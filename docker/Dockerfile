@@ -62,6 +62,16 @@ ARG GIT_SHA=""
 ENV GIT_BRANCH=${GIT_BRANCH}
 ENV GIT_SHA=${GIT_SHA}
 
+# OCI image annotations. image.source lets GHCR auto-link the package to its
+# GitHub repo on push (unblocking CI write access and surfacing repo info on
+# the package page). image.description populates the package summary.
+# Both default to empty for local builds; publish-image and CI's
+# docker/metadata-action fill them in.
+ARG REPO_URL=""
+ARG REPO_DESCRIPTION="ezbeq — BEQ management for MiniDSP, JRiver, CamillaDSP and other DSPs"
+LABEL org.opencontainers.image.source=$REPO_URL \
+      org.opencontainers.image.description=$REPO_DESCRIPTION
+
 # Document the default port. The actual port is set via 'port:' in ezbeq.yml
 # and must be reflected in the compose file's ports: and healthcheck: entries.
 EXPOSE 8080
