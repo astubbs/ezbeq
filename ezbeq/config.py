@@ -238,18 +238,27 @@ class Config:
         result = {
             'branch': os.environ.get('GIT_BRANCH'),
             'sha': os.environ.get('GIT_SHA'),
+            'commit_time': os.environ.get('GIT_COMMIT_TIME'),
         }
-        if result['branch'] and result['sha']:
+        if result['branch'] and result['sha'] and result['commit_time']:
             return result
         try:
-            result['sha'] = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                stderr=subprocess.DEVNULL, cwd=os.path.dirname(__file__)
-            ).decode().strip()
-            result['branch'] = subprocess.check_output(
-                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                stderr=subprocess.DEVNULL, cwd=os.path.dirname(__file__)
-            ).decode().strip()
+            here = os.path.dirname(__file__)
+            if not result['sha']:
+                result['sha'] = subprocess.check_output(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    stderr=subprocess.DEVNULL, cwd=here
+                ).decode().strip()
+            if not result['branch']:
+                result['branch'] = subprocess.check_output(
+                    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                    stderr=subprocess.DEVNULL, cwd=here
+                ).decode().strip()
+            if not result['commit_time']:
+                result['commit_time'] = subprocess.check_output(
+                    ['git', 'log', '-1', '--format=%cI', 'HEAD'],
+                    stderr=subprocess.DEVNULL, cwd=here
+                ).decode().strip()
         except Exception:
             pass
         return result

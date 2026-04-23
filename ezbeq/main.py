@@ -70,28 +70,39 @@ def main(args=None):
     cfg = Config('ezbeq')
     logger = cfg.configure_logger()
 
-    # ── Startup summary (logged before anything else so it's at the top) ──────
+    # ── Startup banner (logged before anything else so it's at the top) ───────
     # Use WARNING so these lines always appear on the console regardless of the
-    # debugLogging setting — they're essential for confirming the right device
-    # and mode is active.
+    # debugLogging setting — they're essential for confirming the right version,
+    # build, device, and mode are active. Operators reading `docker compose logs`
+    # should be able to tell at a glance whether the expected image is running.
     raw = cfg.as_dict()
-    logger.warning('=' * 60)
     gi = cfg.git_info
-    git_str = f"  git: {gi['branch']}@{gi['sha']}" if gi.get('branch') or gi.get('sha') else ''
-    logger.warning(f'  ezbeq  |  http://localhost:{cfg.port}  |  config: {cfg.config_path}{git_str}')
-    logger.warning(f'  logging: debug={cfg.is_debug_logging}  access={cfg.is_access_logging}')
+    version = (cfg.version or 'UNKNOWN').strip()
+    build_parts = []
+    if gi.get('branch') or gi.get('sha'):
+        build_parts.append(f"{gi.get('branch') or '?'} @ {gi.get('sha') or '?'}")
+    if gi.get('commit_time'):
+        build_parts.append(f"({gi['commit_time']})")
+    build_str = '  '.join(build_parts) if build_parts else 'unknown (no git info)'
+
+    logger.warning('=' * 72)
+    logger.warning(f'  ezbeq v{version}')
+    logger.warning(f'  build    : {build_str}')
+    logger.warning(f'  listen   : http://0.0.0.0:{cfg.port}')
+    logger.warning(f'  config   : {cfg.config_path}')
+    logger.warning(f'  logging  : debug={cfg.is_debug_logging}  access={cfg.is_access_logging}')
     for dev_name, dev_cfg in raw.get('devices', {}).items():
         dev_type = dev_cfg.get('type', '?')
         if dev_type == 'minidsp':
             exe = dev_cfg.get('exe', 'minidsp')
             opts = dev_cfg.get('options', '')
             detail = 'STUB (no hardware)' if exe == 'stub' else f'exe={exe}' + (f'  options={opts}' if opts else '')
-            logger.warning(f'  device [{dev_name}]  type=minidsp  {detail}')
+            logger.warning(f'  device   : [{dev_name}]  type=minidsp  {detail}')
         elif dev_type == 'camilladsp':
-            logger.warning(f'  device [{dev_name}]  type=camilladsp  ip={dev_cfg.get("ip")}:{dev_cfg.get("port")}')
+            logger.warning(f'  device   : [{dev_name}]  type=camilladsp  ip={dev_cfg.get("ip")}:{dev_cfg.get("port")}')
         else:
-            logger.warning(f'  device [{dev_name}]  type={dev_type}')
-    logger.warning('=' * 60)
+            logger.warning(f'  device   : [{dev_name}]  type={dev_type}')
+    logger.warning('=' * 72)
 
     app, ws_server = create_app(cfg)
 
