@@ -73,9 +73,19 @@ done
 CACHE_REF="ghcr.io/${OWNER}/ezbeq-buildcache:latest"
 REPO_URL="https://github.com/${OWNER}/ezbeq"
 
+# Stamp ezbeq/VERSION with a PEP 440 local-version snapshot
+# (<pyproject.version>+<branch>.<short-sha>) so the image's banner makes
+# clear this is an unreleased build. ezbeq/VERSION is gitignored, overwriting
+# it is fine. Tag releases are handled by CI, not by this script.
+BASE_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('$REPO_ROOT/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || echo "0.0.0")
+BRANCH_CLEAN=$(echo "${GIT_BRANCH:-unknown}" | tr -c '[:alnum:]' '.' | tr -s '.' | sed 's/^\.//; s/\.$//')
+VERSION_STAMP="${BASE_VERSION}+${BRANCH_CLEAN}.${GIT_SHA:-unknown}"
+echo "$VERSION_STAMP" > "$REPO_ROOT/ezbeq/VERSION"
+
 echo "Owner     : $OWNER"
 echo "Branch    : ${GIT_BRANCH:-unknown}"
 echo "SHA       : ${GIT_SHA:-unknown}"
+echo "Version   : $VERSION_STAMP"
 echo "Platforms : $PLATFORMS"
 echo "Tags      : ${tags[*]}"
 echo "Cache     : $CACHE_REF"
