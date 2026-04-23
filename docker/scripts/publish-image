@@ -70,7 +70,7 @@ for t in "${tags[@]}"; do
     tag_args+=(-t "ghcr.io/${OWNER}/ezbeq:${t}")
 done
 
-CACHE_REF="ghcr.io/${OWNER}/ezbeq:buildcache"
+CACHE_REF="ghcr.io/${OWNER}/ezbeq-buildcache:latest"
 REPO_URL="https://github.com/${OWNER}/ezbeq"
 
 echo "Owner     : $OWNER"
