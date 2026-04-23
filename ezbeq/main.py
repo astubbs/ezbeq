@@ -92,13 +92,7 @@ def main(args=None):
     print('=' * 72, flush=True)
     print(f'  ezbeq v{version}', flush=True)
     print(f'  build    : {build_str}', flush=True)
-    # Show the actual bind. When it's a wildcard (0.0.0.0 / ::), also print a
-    # browse-to URL: browsers often refuse to resolve literal 0.0.0.0 (blank
-    # page). If BIND_HOST ever becomes a specific interface, the browse line
-    # disappears automatically.
     print(f'  listen   : http://{BIND_HOST}:{cfg.port}', flush=True)
-    if BIND_HOST in ('0.0.0.0', '::', ''):
-        print(f'  browse   : http://localhost:{cfg.port}', flush=True)
     print(f'  config   : {cfg.config_path}', flush=True)
     print(f'  logging  : debug={cfg.is_debug_logging}  access={cfg.is_access_logging}', flush=True)
     for dev_name, dev_cfg in raw.get('devices', {}).items():
