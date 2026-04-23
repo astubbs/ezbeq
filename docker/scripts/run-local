@@ -3,12 +3,19 @@
 # Loads optional configuration from docker/.env (copy .env.example if you
 # need to override defaults).
 #
+# A re-invocation while the container is already running restarts it (via
+# --force-recreate) so code/image changes always take effect.
+#
 # Usage:
-#   scripts/run-local               # build + start detached
-#   scripts/run-local --logs        # build + start + follow logs
+#   scripts/run-local               # build + (re)start + follow logs
+#   scripts/run-local --detach, -d  # build + (re)start detached; print URL
+#   scripts/run-local --logs        # alias of the default (kept for habit)
 #   scripts/run-local --rebuild     # force clean rebuild + follow logs
 #   scripts/run-local --stop        # stop and remove the container
 #   scripts/run-local --help        # show this message
+#
+# Ctrl+C while tailing logs detaches from the stream — the container keeps
+# running. Use --stop to tear it down.
 #
 # Works regardless of the directory the script is invoked from.
 set -euo pipefail
@@ -25,7 +32,7 @@ cd "$DOCKER_DIR"
 
 case "${1:-}" in
     -h|--help)
-        sed -n '2,13p' "$SCRIPT_PATH" | sed -E 's/^# ?//'
+        sed -n '2,20p' "$SCRIPT_PATH" | sed -E 's/^# ?//'
         exit 0
         ;;
 esac
@@ -78,11 +85,18 @@ echo "SHA    : ${GIT_SHA:-unknown}"
 
 COMPOSE=(docker compose -f docker-compose.yaml -f docker-compose.dev.yaml)
 
-BUILD_FLAGS=(--build)
+# --force-recreate so a re-invocation while the container is already running
+# actually restarts it instead of becoming a no-op when nothing in the compose
+# spec changed.
+UP_FLAGS=(--build --force-recreate)
+
+# follow_logs / detach: default is follow logs; --detach / -d flips it.
+FOLLOW_LOGS=1
+
 case "${1:-}" in
-    "") ;;  # default: detached up with build
-    --logs) ;;
-    --rebuild) BUILD_FLAGS=(--build --no-cache) ;;
+    "" | --logs) ;;  # default behavior (follow logs)
+    -d|--detach) FOLLOW_LOGS=0 ;;
+    --rebuild) UP_FLAGS=(--build --no-cache --force-recreate) ;;
     --stop)
         "${COMPOSE[@]}" down
         exit 0
@@ -93,11 +107,14 @@ case "${1:-}" in
         ;;
 esac
 
-if [[ "${1:-}" == "--logs" || "${1:-}" == "--rebuild" ]]; then
-    "${COMPOSE[@]}" up -d "${BUILD_FLAGS[@]}"
+"${COMPOSE[@]}" up -d "${UP_FLAGS[@]}"
+
+if (( FOLLOW_LOGS )); then
+    echo
+    echo "Running at http://localhost:$EZBEQ_PORT  (Ctrl+C to detach from logs)"
+    echo
     "${COMPOSE[@]}" logs -f
 else
-    "${COMPOSE[@]}" up -d "${BUILD_FLAGS[@]}"
     echo
     echo "Running at http://localhost:$EZBEQ_PORT"
     echo "Logs: scripts/run-local --logs   |   Stop: scripts/run-local --stop"
