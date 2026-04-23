@@ -17,16 +17,22 @@ FROM python:3.13-slim-trixie AS base
 # Set the environment variable for ezbeq configuration
 ENV EZBEQ_CONFIG_HOME=/config
 
-# Install runtime-only dependencies required by the application
-RUN apt-get update && apt-get install --no-install-recommends -y \
+# Install runtime-only dependencies required by the application.
+# BuildKit cache mounts persist /var/cache/apt and /var/lib/apt across builds
+# so repeat builds don't re-download .deb files. The default
+# /etc/apt/apt.conf.d/docker-clean auto-wipes these after every install, so we
+# remove it first to keep the cache effective.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install --no-install-recommends -y \
     # Utility for downloading files
     curl \
     # SQLite database command-line tool
     sqlite3 \
     # minidsp is dynamically linked against libusb-1.0.so.0 and expects it to be
     # available in the environment, even if USB communication isn't being used
-    libusb-1.0-0 && \
-    rm -rf /var/lib/apt/lists/*
+    libusb-1.0-0
 
 # Dynamically download and install the correct minidsp binary based on architecture
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -64,14 +70,17 @@ EXPOSE 8080
 # Separate stage so build tools don't end up in the final runtime image.
 FROM base AS builder
 
-# Install dependencies required for building the application
-RUN apt-get update && apt-get install --no-install-recommends -y \
+# Install dependencies required for building the application (apt cache mounted
+# so .deb downloads persist across rebuilds — critical under QEMU emulation).
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install --no-install-recommends -y \
     # Tools for compiling and building packages
     build-essential \
     # Python virtual environment creation tool
     python3-venv && \
-    python -m pip install --upgrade pip && \
-    rm -rf /var/lib/apt/lists/*
+    python -m pip install --upgrade pip
 
 # Create a Python virtual environment at /opt/venv
 RUN python -m venv /opt/venv
@@ -133,10 +142,13 @@ RUN --mount=type=cache,target=/app/ui/.yarn/cache \
 FROM base AS dev
 
 # Install build tools needed for Poetry / native Python extensions
-RUN apt-get update && apt-get install --no-install-recommends -y \
+# (apt cache mounted so .deb downloads persist across rebuilds).
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
-    python3-venv && \
-    rm -rf /var/lib/apt/lists/*
+    python3-venv
 
 # Install Poetry; cache pip downloads across builds
 RUN --mount=type=cache,target=/root/.cache/pip \

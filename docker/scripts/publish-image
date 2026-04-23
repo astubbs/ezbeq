@@ -99,17 +99,25 @@ for t in "${tags[@]}"; do
     tag_args+=(-t "ghcr.io/${OWNER}/ezbeq:${t}")
 done
 
+CACHE_REF="ghcr.io/${OWNER}/ezbeq:buildcache"
+
 echo "Owner     : $OWNER"
 echo "Branch    : ${GIT_BRANCH:-unknown}"
 echo "SHA       : ${GIT_SHA:-unknown}"
 echo "Platforms : $PLATFORMS"
 echo "Tags      : ${tags[*]}"
+echo "Cache     : $CACHE_REF"
 echo
 
 # Single buildx invocation: builds every requested platform and pushes the
 # manifest list to GHCR in one step. --push is mutually exclusive with --load,
 # so the image is not available locally; to smoke-test first, pass --load and
 # a single platform manually.
+#
+# The :buildcache tag in the same GHCR repo stores every layer so subsequent
+# builds (here or in CI) reuse them — cutting rebuild time dramatically,
+# especially under QEMU emulation. Writing uses the same docker login as the
+# image push itself, so no extra setup.
 if ! docker buildx build \
     --platform "$PLATFORMS" \
     --target production \
@@ -117,6 +125,8 @@ if ! docker buildx build \
     --build-arg "GIT_SHA=${GIT_SHA}" \
     -f "$REPO_ROOT/docker/Dockerfile" \
     "${tag_args[@]}" \
+    --cache-from "type=registry,ref=${CACHE_REF}" \
+    --cache-to "type=registry,ref=${CACHE_REF},mode=max" \
     --push \
     "$REPO_ROOT"; then
     echo "Error: buildx build/push failed. If the push step failed, did you run 'docker login ghcr.io'?" >&2
